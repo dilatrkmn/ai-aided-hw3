@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+ 
+# Local data: raw Wikipedia text + Chroma database + SQLite
+data/raw/
+data/chunks/
+data/chroma_db/
+data/wikirag.sqlite
+ 
+# OS
+.DS_Store
+Thumbs.db
+ 
+# Editors
+.vscode/
+.idea/
