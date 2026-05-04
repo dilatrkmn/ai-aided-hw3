@@ -89,7 +89,7 @@ python -m scripts.ingest_data --refetch    # re-download articles even if cached
 ### Streamlit (recommended)
 
 ```bash
-streamlit run app.py
+python -m streamlit run app.py
 ```
 
 Then open the URL Streamlit prints (default `http://localhost:8501`). The sidebar shows index / Ollama health, lets you swap models, change `top_k`, toggle retrieved-context display, and clear chat history.
