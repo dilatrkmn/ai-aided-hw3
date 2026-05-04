@@ -65,12 +65,7 @@ class Document:
 
 
 def _fetch_extract(title: str) -> tuple[str, str, str] | None:
-    """Fetch the plain-text extract for a Wikipedia article.
-
-    Returns ``(canonical_title, url, plain_text)`` or ``None`` if the article
-    could not be located. Uses the standard MediaWiki ``api.php`` endpoint with
-    ``prop=extracts`` and ``explaintext=1`` so we get clean text without HTML.
-    """
+    """Fetch the plain-text extract for a Wikipedia article with retry support."""
 
     params = {
         "action": "query",
@@ -81,25 +76,52 @@ def _fetch_extract(title: str) -> tuple[str, str, str] | None:
         "redirects": 1,
         "inprop": "url",
     }
-    headers = {"User-Agent": config.USER_AGENT}
-    resp = requests.get(
-        config.WIKIPEDIA_API, params=params, headers=headers, timeout=30
-    )
-    resp.raise_for_status()
-    payload = resp.json()
-    pages = payload.get("query", {}).get("pages", {})
-    if not pages:
-        return None
-    # ``pages`` is keyed by pageid; -1 means "missing"
-    for pageid, page in pages.items():
-        if pageid == "-1" or "missing" in page:
-            return None
-        text = page.get("extract", "").strip()
-        if not text:
-            return None
-        return page.get("title", title), page.get("fullurl", ""), text
-    return None
 
+    headers = {
+        "User-Agent": config.USER_AGENT
+    }
+
+    max_retries = 5
+
+    for attempt in range(max_retries):
+        try:
+            resp = requests.get(
+                config.WIKIPEDIA_API,
+                params=params,
+                headers=headers,
+                timeout=30,
+            )
+
+            if resp.status_code == 429:
+                wait_time = 10 * (attempt + 1)
+                print(f"    ! rate limited for {title}; waiting {wait_time} seconds...")
+                time.sleep(wait_time)
+                continue
+
+            resp.raise_for_status()
+            payload = resp.json()
+
+            pages = payload.get("query", {}).get("pages", {})
+            if not pages:
+                return None
+
+            for pageid, page in pages.items():
+                if pageid == "-1" or "missing" in page:
+                    return None
+
+                text = page.get("extract", "").strip()
+                if not text:
+                    return None
+
+                return page.get("title", title), page.get("fullurl", ""), text
+
+        except requests.RequestException as e:
+            wait_time = 5 * (attempt + 1)
+            print(f"    ! network error for {title}: {e}; retrying in {wait_time} seconds...")
+            time.sleep(wait_time)
+
+    print(f"    ! failed after retries: {title}")
+    return None
 
 # ---------------------------------------------------------------------------
 # SQLite bookkeeping
@@ -217,16 +239,19 @@ def ingest_all(skip_existing: bool = True) -> list[Document]:
     """Ingest the full configured corpus (people + places)."""
     print("Ingesting people...")
     people_docs = ingest_entities(
-        config.PEOPLE, "person", skip_existing=skip_existing
+        config.PEOPLE,
+        "person",
+        skip_existing=skip_existing,
+        sleep_seconds=3.0,
     )
+
     print("\nIngesting places...")
     place_docs = ingest_entities(
-        config.PLACES, "place", skip_existing=skip_existing
+        config.PLACES,
+        "place",
+        skip_existing=skip_existing,
+        sleep_seconds=3.0,
     )
-    print(
-        f"\nDone. {len(people_docs)} people, {len(place_docs)} places ingested."
-    )
-    return people_docs + place_docs
 
 
 if __name__ == "__main__":  # pragma: no cover - manual entry point
