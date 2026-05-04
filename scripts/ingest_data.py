@@ -26,8 +26,13 @@ def main() -> int:
 
     print("Step 1/3: Fetching Wikipedia articles...")
     docs = ingest.ingest_all(skip_existing=not args.refetch)
+
     if not docs:
-        print("No documents ingested. Aborting.", file=sys.stderr)
+        print("No newly ingested documents; loading existing local documents...")
+        docs = ingest.load_all_documents()
+
+    if not docs:
+        print("No documents available. Aborting.", file=sys.stderr)
         return 1
 
     print(f"\nStep 2/3: Chunking {len(docs)} documents...")
